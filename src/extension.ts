@@ -7,6 +7,9 @@ let globalWebviewView: vscode.WebviewView | undefined = undefined;
 export function activate(context: vscode.ExtensionContext) {
     console.log('Intelligent Assistant is now active!');
 
+    // Create default model if it doesn't exist
+    modelManager.createDefaultModel();
+
     // Register webview view provider for sidebar
     const provider = new AssistantWebviewProvider(context);
 
@@ -108,6 +111,12 @@ class AssistantWebviewProvider implements vscode.WebviewViewProvider {
                     case 'switchModel':
                         await this.handleSwitchModel(message.data.modelId);
                         break;
+                    case 'saveModel':
+                        await this.handleSaveModel(message.data.model);
+                        break;
+                    case 'deleteModel':
+                        await this.handleDeleteModel(message.data.modelId);
+                        break;
                     case 'clearChat':
                         this.messages = [];
                         break;
@@ -141,6 +150,52 @@ class AssistantWebviewProvider implements vscode.WebviewViewProvider {
                 data: {
                     models: modelManager.getModels(),
                     currentModelId: modelId
+                }
+            });
+        }
+    }
+
+    private async handleSaveModel(model: ModelConfig) {
+        const existing = modelManager.getModel(model.id);
+
+        if (existing) {
+            // Update existing model
+            await modelManager.updateModel(model.id, model);
+            vscode.window.showInformationMessage('Model updated successfully!');
+        } else {
+            // Add new model
+            await modelManager.addModel(model);
+            vscode.window.showInformationMessage('Model added successfully!');
+
+            // Set as current model if it's the first one
+            if (modelManager.getModels().length === 1) {
+                await modelManager.setCurrentModel(model.id);
+            }
+        }
+
+        // Notify webview of model update
+        if (globalWebviewView) {
+            globalWebviewView.webview.postMessage({
+                type: 'modelsUpdated',
+                data: {
+                    models: modelManager.getModels(),
+                    currentModelId: modelManager.getCurrentModelId()
+                }
+            });
+        }
+    }
+
+    private async handleDeleteModel(modelId: string) {
+        await modelManager.deleteModel(modelId);
+        vscode.window.showInformationMessage('Model deleted successfully!');
+
+        // Notify webview of model update
+        if (globalWebviewView) {
+            globalWebviewView.webview.postMessage({
+                type: 'modelsUpdated',
+                data: {
+                    models: modelManager.getModels(),
+                    currentModelId: modelManager.getCurrentModelId()
                 }
             });
         }

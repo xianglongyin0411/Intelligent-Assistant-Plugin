@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ChatContainer } from './ChatContainer';
 import { ChatInput } from './ChatInput';
 import { ModelSelector } from './ModelSelector';
+import { ModelManagerDialog } from './ModelManagerDialog';
 import type { ChatMessage, ExtensionMessage, WebviewMessage, ModelConfig } from '../webview/types';
 import { acquireVsCodeApi } from '../webview/types';
 
@@ -14,6 +15,7 @@ export function AssistantPanel() {
     const [models, setModels] = useState<ModelConfig[]>([]);
     const [currentModelId, setCurrentModelId] = useState('');
     const [isSending, setIsSending] = useState(false);
+    const [isModelManagerOpen, setIsModelManagerOpen] = useState(false);
     const isSendingRef = useRef(false);
     const isInitializedRef = useRef(false);
 
@@ -225,6 +227,20 @@ export function AssistantPanel() {
         } as WebviewMessage);
     };
 
+    const handleSaveModel = (model: ModelConfig) => {
+        vscode.postMessage({
+            type: 'saveModel',
+            data: { model }
+        } as WebviewMessage);
+    };
+
+    const handleDeleteModel = (modelId: string) => {
+        vscode.postMessage({
+            type: 'deleteModel',
+            data: { modelId }
+        } as WebviewMessage);
+    };
+
     return (
         <div style={{
             display: 'flex',
@@ -250,6 +266,27 @@ export function AssistantPanel() {
                     AI Assistant
                 </h1>
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <button
+                        onClick={() => setIsModelManagerOpen(true)}
+                        style={{
+                            backgroundColor: 'var(--vscode-button-secondaryBackground)',
+                            color: 'var(--vscode-button-secondaryForeground)',
+                            border: 'none',
+                            padding: '3px 10px',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            opacity: 0.8
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryHoverBackground)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryBackground)';
+                        }}
+                    >
+                        Manage Models
+                    </button>
                     <ModelSelector
                         models={models}
                         currentModelId={currentModelId}
@@ -280,6 +317,13 @@ export function AssistantPanel() {
             </div>
             <ChatContainer messages={messages} isStreaming={isStreaming} />
             <ChatInput onSendMessage={handleSendMessage} disabled={isSending} />
+            <ModelManagerDialog
+                isOpen={isModelManagerOpen}
+                models={models}
+                onClose={() => setIsModelManagerOpen(false)}
+                onSave={handleSaveModel}
+                onDelete={handleDeleteModel}
+            />
         </div>
     );
 }

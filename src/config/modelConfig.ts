@@ -135,9 +135,15 @@ export class ModelManager {
 
         const models = this.getModels();
         const existing = models.find(m => m.id === 'default-deepseek');
+
+        // Always create default model if it doesn't exist, even if apiKey is empty
+        // This allows users to see and edit it in the Model Management dialog
         if (!existing) {
             await this.addModel(defaultModel);
             await this.setCurrentModel('default-deepseek');
+            console.log('[ModelManager] Created default DeepSeek model');
+        } else {
+            console.log('[ModelManager] Default model already exists');
         }
     }
 }

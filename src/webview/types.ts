@@ -35,8 +35,10 @@ export type WebviewMessage =
     | { type: 'init' }
     | { type: 'sendMessage'; data: { message: string; modelId?: string } }
     | { type: 'switchModel'; data: { modelId: string } }
+    | { type: 'saveModel'; data: { model: ModelConfig } }
+    | { type: 'deleteModel'; data: { modelId: string } }
     | { type: 'clearChat' }
-    | { type: 'openSettings' };
+    | { type: 'openSettings' }
 
 // VS Code API for webview
 declare const vscode: {
