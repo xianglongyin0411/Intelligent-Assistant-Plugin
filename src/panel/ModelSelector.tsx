@@ -1,4 +1,5 @@
 import type { ModelConfig } from '../webview/types';
+import { acquireVsCodeApi } from '../webview/types';
 
 interface ModelSelectorProps {
     models: ModelConfig[];
@@ -11,7 +12,7 @@ export function ModelSelector({ models, currentModelId, onModelChange }: ModelSe
 
     const handleOpenSettings = () => {
         // Notify extension to open settings
-        const vscode = (globalThis as any).acquireVsCodeApi();
+        const vscode = acquireVsCodeApi();
         vscode.postMessage({ type: 'openSettings' });
     };
 

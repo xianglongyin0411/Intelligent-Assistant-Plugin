@@ -31,7 +31,7 @@ export class ModelManager {
      * Get all configured models
      */
     getModels(): ModelConfig[] {
-        const config = vscode.workspace.getConfiguration(this.configKey);
+        const config = vscode.workspace.getConfiguration('assistant');
         const models = config.get<ModelConfig[]>('models', []);
         return models;
     }

@@ -8,7 +8,11 @@ module.exports = {
     output: {
         path: path.resolve(__dirname, 'out', 'webview'),
         filename: 'bundle.js',
-        clean: true
+        clean: true,
+        library: {
+            name: '__WEBPACK_IMPORTED_MODULES__',
+            type: 'window'
+        }
     },
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
@@ -38,19 +42,35 @@ module.exports = {
                     to: 'highlightjs/languages/[name][ext]',
                     globOptions: {
                         ignore: ['**/test*']
+                    },
+                    noErrorOnMissing: true,
+                    transform(content) {
+                        // Don't minify highlight.js files to preserve module format
+                        return content;
                     }
                 },
                 {
                     from: 'node_modules/highlight.js/lib/core.js',
-                    to: 'highlightjs/core.js'
+                    to: 'highlightjs/core.js',
+                    transform(content) {
+                        // Don't minify highlight.js files to preserve module format
+                        return content;
+                    }
                 },
                 {
                     from: 'node_modules/highlight.js/lib/highlight.js',
-                    to: 'highlightjs/highlight.js'
+                    to: 'highlightjs/highlight.js',
+                    transform(content) {
+                        // Don't minify highlight.js files to preserve module format
+                        return content;
+                    }
                 }
             ]
         })
     ],
+    optimization: {
+        minimize: false
+    },
     devtool: 'source-map',
     externals: {
         vscode: 'commonjs vscode'

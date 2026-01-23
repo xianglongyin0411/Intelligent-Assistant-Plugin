@@ -35,6 +35,11 @@
         "command": "assistant.configure",
         "title": "Configure AI Model",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "assistant.manageModels",
+        "title": "Manage AI Models",
+        "icon": "$(settings-gear)"
       }
     ],
     "views": {

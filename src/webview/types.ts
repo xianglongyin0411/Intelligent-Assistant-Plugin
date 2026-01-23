@@ -28,7 +28,8 @@ export type ExtensionMessage =
     | { type: 'streamEnd' }
     | { type: 'error'; data: { error: string } }
     | { type: 'clearChat' }
-    | { type: 'modelsUpdated'; data: { models: ModelConfig[]; currentModelId: string } };
+    | { type: 'modelsUpdated'; data: { models: ModelConfig[]; currentModelId: string } }
+    | { type: 'modelManagementResponse'; data: { models: ModelConfig[]; currentModelId: string } };
 
 // Messages from Webview to Extension
 export type WebviewMessage =
@@ -36,7 +37,8 @@ export type WebviewMessage =
     | { type: 'sendMessage'; data: { message: string; modelId?: string } }
     | { type: 'switchModel'; data: { modelId: string } }
     | { type: 'clearChat' }
-    | { type: 'openSettings' };
+    | { type: 'openSettings' }
+    | { type: 'modelManagement'; data: { action: 'init' | 'add' | 'update' | 'delete'; model?: ModelConfig } };
 
 // VS Code API for webview
 declare const vscode: {
@@ -45,6 +47,11 @@ declare const vscode: {
     setState: (state: unknown) => void;
 };
 
+let cachedVsCodeApi: typeof vscode | null = null;
+
 export const acquireVsCodeApi = (): typeof vscode => {
-    return (globalThis as any).acquireVsCodeApi();
+    if (!cachedVsCodeApi) {
+        cachedVsCodeApi = (globalThis as any).acquireVsCodeApi();
+    }
+    return cachedVsCodeApi!;
 };

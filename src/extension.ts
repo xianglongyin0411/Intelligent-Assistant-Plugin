@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { modelManager, ModelConfig } from './config/modelConfig';
 
+interface ModelQuickPickItem extends vscode.QuickPickItem {
+    model?: ModelConfig;
+}
+
 let globalWebviewView: vscode.WebviewView | undefined = undefined;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -29,39 +33,291 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const configureCommand = vscode.commands.registerCommand('assistant.configure', async () => {
-        const config = vscode.workspace.getConfiguration('assistant');
-
-        const apiKey = await vscode.window.showInputBox({
-            prompt: 'Enter your DeepSeek API Key',
-            password: true,
-            value: config.get<string>('apiKey', '')
-        });
-
-        if (apiKey !== undefined) {
-            config.update('apiKey', apiKey, vscode.ConfigurationTarget.Global);
-            vscode.window.showInformationMessage('API Key saved successfully!');
-        }
-
-        const model = await vscode.window.showInputBox({
-            prompt: 'Enter model name',
-            value: config.get<string>('model', 'deepseek-chat')
-        });
-
-        if (model !== undefined) {
-            config.update('model', model, vscode.ConfigurationTarget.Global);
-        }
-
-        const baseUrl = await vscode.window.showInputBox({
-            prompt: 'Enter API base URL',
-            value: config.get<string>('baseUrl', 'https://api.deepseek.com/v1')
-        });
-
-        if (baseUrl !== undefined) {
-            config.update('baseUrl', baseUrl, vscode.ConfigurationTarget.Global);
-        }
+        await showModelQuickPick();
     });
 
-    context.subscriptions.push(viewProvider, clearChatCommand, configureCommand);
+    const manageModelsCommand = vscode.commands.registerCommand('assistant.manageModels', async () => {
+        await showModelQuickPick();
+    });
+
+    async function showModelQuickPick() {
+        console.log('[DEBUG] showModelQuickPick called');
+        let models = modelManager.getModels();
+        let currentModelId = modelManager.getCurrentModelId();
+
+        console.log('[DEBUG] Initial models count:', models.length, 'currentModelId:', currentModelId);
+
+        // Clean up stale data: if currentModelId exists but no matching model, clear it
+        if (currentModelId && !models.find(m => m.id === currentModelId)) {
+            console.log('[DEBUG] Clearing stale currentModelId:', currentModelId);
+            await modelManager.setCurrentModel('');
+            currentModelId = '';
+        }
+
+        // Loop to allow user to keep managing models
+        while (true) {
+            const items: ModelQuickPickItem[] = [
+                {
+                    label: '$(plus) 添加新模型',
+                    description: '配置一个新的 AI 模型'
+                },
+                ...models.map(model => ({
+                    label: `$(${model.id === currentModelId ? 'check' : 'circle-outline'}) ${model.name} (${model.provider})`,
+                    description: model.id,
+                    model
+                }))
+            ];
+
+            console.log('[DEBUG] QuickPick items count:', items.length);
+
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: '选择或添加模型',
+                title: '模型配置管理'
+            });
+
+            console.log('[DEBUG] QuickPick selected:', selected);
+
+            // Update models and currentModelId after any operation
+            models = modelManager.getModels();
+            currentModelId = modelManager.getCurrentModelId();
+
+            if (!selected) {
+                // User pressed Escape, exit
+                break;
+            }
+
+            if (selected.label.includes('添加新模型')) {
+                console.log('[DEBUG] Calling addNewModel');
+                await addNewModel();
+                // Continue to show updated list
+            } else if (selected.model) {
+                const model = selected.model;
+                const actions = await vscode.window.showQuickPick([
+                    { label: '设为当前模型', description: '切换到此模型' },
+                    { label: '编辑模型', description: '修改模型配置' },
+                    { label: '删除模型', description: '移除此模型配置' }
+                ], { placeHolder: `操作: ${model.name}` });
+
+                if (!actions) {
+                    // User pressed Escape, continue showing QuickPick
+                    continue;
+                }
+
+                switch (actions.label) {
+                    case '设为当前模型':
+                        console.log('[DEBUG] Setting current model:', model.id);
+                        await modelManager.setCurrentModel(model.id);
+                        vscode.window.showInformationMessage(`已切换到 ${model.name}`);
+
+                        // Notify webview of model update
+                        const models = modelManager.getModels();
+                        const currentModelId = modelManager.getCurrentModelId();
+                        if (globalWebviewView) {
+                            globalWebviewView.webview.postMessage({
+                                type: 'modelsUpdated',
+                                data: { models, currentModelId }
+                            });
+                        }
+                        // Continue to show updated QuickPick
+                        break;
+                    case '编辑模型':
+                        console.log('[DEBUG] Calling editModel for:', model.id);
+                        await editModel(model);
+                        // Continue to show updated QuickPick
+                        break;
+                    case '删除模型':
+                        const confirm = await vscode.window.showWarningMessage(
+                            `确定要删除模型 "${model.name}" 吗？`,
+                            { modal: true },
+                            '删除',
+                            '取消'
+                        );
+                        if (confirm === '删除') {
+                            console.log('[DEBUG] Deleting model:', model.id);
+                            await modelManager.deleteModel(model.id);
+                            vscode.window.showInformationMessage('模型已删除');
+
+                            // Notify webview of model update
+                            const models = modelManager.getModels();
+                            const currentModelId = modelManager.getCurrentModelId();
+                            if (globalWebviewView) {
+                                globalWebviewView.webview.postMessage({
+                                    type: 'modelsUpdated',
+                                    data: { models, currentModelId }
+                                });
+                            }
+                            // Continue to show updated QuickPick
+                        } else {
+                            // User cancelled delete, continue showing QuickPick
+                            continue;
+                        }
+                        break;
+                }
+            }
+        }
+    }
+
+    async function addNewModel() {
+        const name = await vscode.window.showInputBox({
+            prompt: '模型名称',
+            placeHolder: '例如: gpt-4, deepseek-chat'
+        });
+        if (!name) return;
+
+        const provider = await vscode.window.showInputBox({
+            prompt: '提供商',
+            placeHolder: '例如: OpenAI, DeepSeek',
+            value: 'DeepSeek'
+        });
+        if (!provider) return;
+
+        const baseUrl = await vscode.window.showInputBox({
+            prompt: 'API Base URL',
+            placeHolder: 'https://api.openai.com/v1',
+            value: 'https://api.deepseek.com/v1'
+        });
+        if (!baseUrl) return;
+
+        const apiKey = await vscode.window.showInputBox({
+            prompt: 'API Key',
+            password: true,
+            placeHolder: 'sk-...'
+        });
+        if (!apiKey) return;
+
+        const maxTokensInput = await vscode.window.showInputBox({
+            prompt: '最大 Tokens',
+            value: '2048',
+            validateInput: (value) => {
+                const num = parseInt(value);
+                return isNaN(num) || num < 1 ? '请输入有效的数字' : undefined;
+            }
+        });
+        const maxTokens = maxTokensInput ? parseInt(maxTokensInput) : 2048;
+
+        const temperatureInput = await vscode.window.showInputBox({
+            prompt: '温度 (0-2)',
+            value: '0.7',
+            validateInput: (value) => {
+                const num = parseFloat(value);
+                return isNaN(num) || num < 0 || num > 2 ? '请输入 0-2 之间的数字' : undefined;
+            }
+        });
+        const temperature = temperatureInput ? parseFloat(temperatureInput) : 0.7;
+
+        const newModel: ModelConfig = {
+            id: `model-${Date.now()}`,
+            name,
+            provider,
+            baseUrl,
+            apiKey,
+            maxTokens,
+            temperature
+        };
+
+        // Get current models count before adding
+        const currentModels = modelManager.getModels();
+        const isEmpty = currentModels.length === 0;
+
+        await modelManager.addModel(newModel);
+        vscode.window.showInformationMessage('模型添加成功！');
+
+        // If this was the first model, set it as current
+        if (isEmpty) {
+            await modelManager.setCurrentModel(newModel.id);
+        }
+
+        // Notify webview of model update
+        const models = modelManager.getModels();
+        const currentModelId = modelManager.getCurrentModelId();
+        if (globalWebviewView) {
+            globalWebviewView.webview.postMessage({
+                type: 'modelsUpdated',
+                data: { models, currentModelId }
+            });
+        }
+    }
+
+    async function editModel(model: ModelConfig) {
+        const name = await vscode.window.showInputBox({
+            prompt: '模型名称',
+            value: model.name
+        });
+        if (name === undefined) return;
+        if (!name) return;
+
+        const provider = await vscode.window.showInputBox({
+            prompt: '提供商',
+            value: model.provider
+        });
+        if (provider === undefined) return;
+        if (!provider) return;
+
+        const baseUrl = await vscode.window.showInputBox({
+            prompt: 'API Base URL',
+            value: model.baseUrl
+        });
+        if (baseUrl === undefined) return;
+        if (!baseUrl) return;
+
+        const apiKey = await vscode.window.showInputBox({
+            prompt: 'API Key',
+            password: true,
+            value: model.apiKey,
+            placeHolder: 'sk-...'
+        });
+        if (apiKey === undefined) return;
+        if (!apiKey) return;
+
+        const maxTokensInput = await vscode.window.showInputBox({
+            prompt: '最大 Tokens',
+            value: String(model.maxTokens || 2048),
+            validateInput: (value) => {
+                const num = parseInt(value);
+                return isNaN(num) || num < 1 ? '请输入有效的数字' : undefined;
+            }
+        });
+        if (maxTokensInput === undefined) return;
+        const maxTokens = parseInt(maxTokensInput);
+
+        const temperatureInput = await vscode.window.showInputBox({
+            prompt: '温度 (0-2)',
+            value: String(model.temperature || 0.7),
+            validateInput: (value) => {
+                const num = parseFloat(value);
+                return isNaN(num) || num < 0 || num > 2 ? '请输入 0-2 之间的数字' : undefined;
+            }
+        });
+        if (temperatureInput === undefined) return;
+        const temperature = parseFloat(temperatureInput);
+
+        await modelManager.updateModel(model.id, {
+            name,
+            provider,
+            baseUrl,
+            apiKey,
+            maxTokens,
+            temperature
+        });
+        vscode.window.showInformationMessage('模型更新成功！');
+
+        // Notify webview of model update
+        const models = modelManager.getModels();
+        const currentModelId = modelManager.getCurrentModelId();
+        if (globalWebviewView) {
+            globalWebviewView.webview.postMessage({
+                type: 'modelsUpdated',
+                data: { models, currentModelId }
+            });
+        }
+    }
+
+    context.subscriptions.push(
+        viewProvider,
+        clearChatCommand,
+        configureCommand,
+        manageModelsCommand
+    );
 }
 
 class AssistantWebviewProvider implements vscode.WebviewViewProvider {
@@ -111,6 +367,12 @@ class AssistantWebviewProvider implements vscode.WebviewViewProvider {
                     case 'clearChat':
                         this.messages = [];
                         break;
+                    case 'openSettings':
+                        await this.handleOpenSettings();
+                        break;
+                    case 'modelManagement':
+                        await this.handleModelManagement(webviewView, message.data);
+                        break;
                 }
             }
         );
@@ -142,6 +404,58 @@ class AssistantWebviewProvider implements vscode.WebviewViewProvider {
                     models: modelManager.getModels(),
                     currentModelId: modelId
                 }
+            });
+        }
+    }
+
+    private async handleOpenSettings() {
+        // Open model management webview
+        try {
+            console.log('[DEBUG] Opening model management...');
+            await vscode.commands.executeCommand('assistant.manageModels');
+            console.log('[DEBUG] Model management command executed');
+        } catch (error) {
+            console.error('[ERROR] Failed to open model management:', error);
+            vscode.window.showErrorMessage(`打开模型管理失败: ${error}`);
+        }
+    }
+
+    private async handleModelManagement(
+        webviewView: vscode.WebviewView,
+        data: { action: 'init' | 'add' | 'update' | 'delete'; model?: ModelConfig }
+    ) {
+        switch (data.action) {
+            case 'add':
+                if (data.model) {
+                    await modelManager.addModel(data.model);
+                }
+                break;
+            case 'update':
+                if (data.model) {
+                    await modelManager.updateModel(data.model.id, data.model);
+                }
+                break;
+            case 'delete':
+                if (data.model) {
+                    await modelManager.deleteModel(data.model.id);
+                }
+                break;
+        }
+
+        // Send updated model list back to webview
+        const models = modelManager.getModels();
+        const currentModelId = modelManager.getCurrentModelId();
+
+        webviewView.webview.postMessage({
+            type: 'modelManagementResponse',
+            data: { models, currentModelId }
+        });
+
+        // Also notify main assistant panel of model changes
+        if (globalWebviewView && globalWebviewView !== webviewView) {
+            globalWebviewView.webview.postMessage({
+                type: 'modelsUpdated',
+                data: { models, currentModelId }
             });
         }
     }

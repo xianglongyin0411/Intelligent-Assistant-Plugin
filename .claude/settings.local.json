@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run compile:*)",
+      "Bash(npm run bundle:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
