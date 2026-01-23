@@ -27,7 +27,7 @@ export type ExtensionMessage =
     | { type: 'receiveChunk'; data: { content: string } }
     | { type: 'streamEnd' }
     | { type: 'error'; data: { error: string } }
-    | { type: 'clearChat' }
+    | { type: 'chatCleared' }
     | { type: 'modelsUpdated'; data: { models: ModelConfig[]; currentModelId: string } }
     | { type: 'modelManagementResponse'; data: { models: ModelConfig[]; currentModelId: string } };
 

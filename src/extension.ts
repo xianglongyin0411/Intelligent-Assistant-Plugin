@@ -366,6 +366,13 @@ class AssistantWebviewProvider implements vscode.WebviewViewProvider {
                         break;
                     case 'clearChat':
                         this.messages = [];
+
+                        // Notify webview to clear the chat interface
+                        if (globalWebviewView) {
+                            globalWebviewView.webview.postMessage({ type: 'chatCleared' });
+                        }
+
+                        vscode.window.showInformationMessage('聊天记录已清空');
                         break;
                     case 'openSettings':
                         await this.handleOpenSettings();

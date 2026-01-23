@@ -118,46 +118,17 @@ code --install-extension intelligent-assistant-plugin-1.0.0.vsix
 
 ## 开发进度
 
-- [x] 基础项目结构搭建
-- [x] VS Code 扩展配置
-- [x] 配置管理模块
-- [x] API 服务模块
-- [x] Webview UI 基础
-- [x] 流式响应支持
+- [√] 基础项目结构搭建
+- [√] VS Code 扩展配置
+- [√] 配置管理模块
+- [√] API 服务模块
+- [√] Webview UI 基础
+- [√] 多模型支持（OpenAI、Claude、Kimi 等）
 - [ ] Markdown 渲染
 - [ ] 代码语法高亮
 - [ ] 多模型支持
 - [ ] 聊天历史保存
 - [ ] 快捷键支持
 
-## 待实现功能（加分项）
 
-- [ ] 支持 Markdown 渲染
-- [ ] 代码块语法高亮
-- [ ] 多模型支持（OpenAI、Claude、Kimi 等）
-- [ ] 聊天记录本地存储
-- [ ] 快捷键支持
-- [ ] 上下文感知（读取当前文件内容）
-- [ ] 代码补全建议
 
-## 常见问题
-
-### API Key 无效？
-
-请确保 API Key 正确，并且账户有足够余额。在 [DeepSeek 平台](https://platform.deepseek.com) 检查 API Key 状态。
-
-### 无法连接到 API？
-
-检查网络连接和 API Base URL 是否正确。
-
-### 界面显示异常？
-
-尝试重新加载窗口（Ctrl+Shift+P → "Developer: Reload Window"）
-
-## 许可证
-
-MIT License
-
-## 联系方式
-
-如有问题或建议，请联系：zhoujie195@midea.com
